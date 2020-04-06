@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>JEX</title>
+</head>
+<body>
+<input type="file" id="inp">
+<br />
+<section>
+<button type="button" id="Compilar">Compile</button>
+<textarea id="respuesta" contentEditable="true">HEX</textarea>
+<br />
+<textarea id="respuesta2" contentEditable="true">ASCII PRINTABLE CHARACTERS</textarea>
+
+</section>
+<style>
+#respuesta {
+
+width: 100%;
+height: 500px;
+overflow: scroll;
+
+}
+
+textarea {
+
+width: 100%;
+height: 500px;
+overflow: scroll;
+background-color: #ccc;
+	
+}
+</style>
+
+<script>
+function hexDump(file) {
+  return new Promise((res, rej) => {
+    if(!(file instanceof Blob)) {
+      rej('Elige Un Archivo');
+    }
+    const fr = new FileReader();
+    fr.onload = e => {
+      res(hex(fr.result));
+    };
+    fr.onerror = e => rej('No se pudo leer');
+    fr.readAsArrayBuffer(file);
+  });
+
+  function hex(buffer) {
+    const hexCodes = [];
+    const view = new DataView(buffer);
+    for(let i=0; i<view.byteLength; i+=4) {
+
+      let value = view.getUint32(i);
+      let stringValue = value.toString(16);
+      let padding = '00000000';
+      let paddedValue = (padding+stringValue).slice(-padding.length).toUpperCase();
+      hexCodes.push(paddedValue.slice(0, 4),
+        paddedValue.slice(4, 8)/*,
+	paddedValue.slice(8, 12),
+	paddedValue.slice(12, 16)*/);
+    }
+	  
+    hexCodes.join(' ');
+
+    let finalx = [];                                                for(let i=1; i < hexCodes.length+1; ++i) {                        finalx += hexCodes[i-1];
+    }
+
+    return finalx;
+  }
+
+}
+
+var respuesta = document.querySelector("#respuesta");
+var hexSinFormato;
+var respuesta2 = document.querySelector("#respuesta2");
+var botonCompilar = document.querySelector("#Compilar");
+
+botonCompilar.addEventListener("click", function() {
+  CompilarBin(respuesta.value);
+});
+
+function CompilarBin(datos) {
+datos = datos.replace(/(\r\n|\n|\r)/gm,"").replace(/\s/gm,"");
+window.location=URL.createObjectURL(Compile(datos));
+
+}
+
+inp.onchange = e => {alert("Analizando...");hexDump(inp.files[0])
+	.then(hex => {
+          hexSinFormato=hex;
+          respuesta.value=Format(hex, 4, " ", 32);
+ 	  respuesta2.value=Format(HexToAscii(hexSinFormato), 2, "   ", 16)
+
+	})
+        .catch(e => alert(e));
+}
+
+
+
+
+
+function HexToAscii(hex) {
+  hex = hex.toString();
+  var str = "";
+    for (var i=0; i < hex.length; i+=2) {
+			 if(parseInt(hex.substr(i, 2), 16) > 31 && parseInt(hex.substr(i, 2), 16)  < 128) {		
+        switch (parseInt(hex.substr(i, 2), 16)) {
+   
+	  case 32:
+          str += " ";
+	  break;
+			 
+          default:
+	  str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+        }
+      } else {
+        str += ".";
+      }   
+    }  
+  return str;
+}
+
+
+function Format(texto, padding, separador, paddingSalto) {
+  let str = "";                                                   for(let j=1; j < texto.length+1; ++j) {                           str += texto[j-1];                                               if(j % padding == 0) {                                           str+= separador;                                                    }                                                                                                                          if(j >= paddingSalto) {                                           if(j % paddingSalto  == 0) {                                      str += "\n\n";
+       }
+     }
+  }  
+  return str;
+}
+
+
+function Compile(hexData) {
+  let byteArray = new Uint8Array(hexData.match(/.{2}/g)
+	.map(e => parseInt(e, 16)));
+  let blob = new Blob([byteArray], {type:"application/octet-stream"});
+  return blob;
+}
+</script>
+</body>
+</html>
