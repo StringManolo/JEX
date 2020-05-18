@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>JEX</title>
+<script>
+/* SHORTCUTJS lib by StringManolo.
+Use of the global Scope to code faster, reduce file sizes, reduce memory usage and make some code more readable/compact. Readable Version */
+(function (){
+  DEFINE=function(constant, value) {
+  if(window[constant]===undefined) {
+    window[constant] = value
+  } else {
+    throw new ReferenceError(constant + " is already a property of the global/window Object.\nRedefinition not allowed.");
+  }
+}
+
+wrapQS=function(selector) {
+  return d.querySelector(selector)
+}
+
+wrapQSA=function(selector) {
+  return d.querySelectorAll(selector)
+}
+
+wrapAEL=function(elemnt, event, value) {
+  elemnt.addEventListener(event, value);
+}
+
+DEFINE("d", window.document);
+DEFINE("w", window);
+DEFINE("$", wrapQS);
+DEFINE("$$", wrapQSA);
+DEFINE("dw", d.write);
+DEFINE("_", window.alert);
+DEFINE("ael", wrapAEL);
+
+})();
+</script>
+</head>
+<body>
+<input type="file" id="inp">
+<br />
+<section>
+<button type="button" id="Compilar">Compile</button>
+<button type="button" id="Info">Info</button>
+<br />
+<div id="top">
+<textarea id="addressRes" readonly>ADDRESS</textarea>
+<textarea id="respuesta" contentEditable="true">HEX</textarea>
+</div>
+<br />
+<div id="bottom">
+<textarea id="addressRes2" readonly>ADDRESS</textarea>
+<textarea id="respuesta2" readonly>ASCII PRINTABLE CHARACTERS</textarea>
+</div>
+</section>
+<style>
+textarea {
+
+width: 75%;
+height: 200px;
+overflow: scroll;
+background-color: #fff;
+text-size-adjust: none;
+font-family: Verdana, Arial, Helvetica, sans-serif;
+font-size: 33px;
+border-style: none;
+text-align: justify;
+white-space: pre-line;
+resize: none;
+-moz-text-align-last: justify;
+text-align-last: justify;
+}
+
+#top, #bottom {
+  display: flex;
+  background-color: #eee;
+  text-align: justify;
+}
+
+#addressRes, #addressRes2 {
+  width: 20%;
+  font-family: Verdana, Arial, Helvetica, sans-serif;
+  font-size: 33px;
+  background-color: #ddd;
+  text-align: center;
+}
+</style>
+
+<script>
+let bin = {}
+
+if(!(w.FileReader && w.Blob))
+  _("Tu navegador no soporta el manejo de archivos.");
+
+
+function hexDump(file) {
+  return new Promise((res, rej) => {
+    if(!(file instanceof Blob))
+      rej('Elige Un Archivo');
+    const fr = new FileReader();
+    fr.onload = e => {
+      try {
+        res(hex(fr.result));
+      } catch(err) {}
+    };
+    fr.onerror = e => rej('No se pudo leer');
+    fr.readAsArrayBuffer(file);
+  });
+
+  function hex(buffer) {
+    const hexCodes = [];
+    let view;
+    try { 
+      view = new DataView(buffer);
+    } catch(err) {}
+    for(let i=0; i<view.byteLength; i+=4) {
+      let value;
+      try{
+        value = view.getUint32(i);
+      } catch(err) {}
+      let stringValue;
+      try{
+        stringValue = value.toString(16);
+      } catch(err) {}
+      let padding = '00000000';
+      let paddedValue;
+      try{
+        paddedValue = (padding+stringValue).slice(-padding.length).toUpperCase();
+      } catch(err) {}
+      hexCodes.push(paddedValue.slice(0, 4),
+      paddedValue.slice(4, 8));
+    }
+    try {
+      hexCodes.join(' ');
+    } catch(err) {}
+    let finalx = [];                                           for(let i=1; i < hexCodes.length+1; ++i) {
+      try{
+        finalx += hexCodes[i-1];
+      } catch(err) {}
+    }
+    bin.hex = {};
+    bin.hex.raw = finalx;
+    return finalx;
+  }
+}
+
+let hexSinFormato;
+
+ael($("#Compilar"), "click", function() {
+  CompilarBin($("#respuesta").value);
+});
+
+ael($("#Info"), "click", function() {
+  MostrarInfo($("#respuesta").value);
+});
+
+function getRawDatos(datos) {
+  return datos.replace(/(\r\n|\n|\r)/gm,"").replace(/\s/gm,"");
+}
+
+function CompilarBin(datos) {
+  datos = getRawDatos(datos);
+  window.location=URL.createObjectURL(Compile(datos));
+}
+
+function MostrarInfo(datos) {
+  datos = getRawDatos(datos);
+  let rawHeader = "";
+  for (let i = 0; i < 48; ++i)
+    rawHeader += datos[i]; 
+
+  bin.info = {}; 
+  bin.info.type = MimeType(rawHeader);
+  bin.info.rawHeader = bin.info.type;
+  bin.info.arch = "unavailable";
+  bin.info.dataEncoding = "unavailable";
+  bin.info.ABI = "unavailable";
+  bin.info.machine = "unavailable";
+  bin.info.entryPoint = "unavailable";
+  bin.info.programHeaderT = "unavailable";
+  bin.info.sectionHeaderT = "unavailable";
+
+  function MimeType(header) {
+    function CompareMagicN(header, magic) {
+      for(let j = 0; j < magic.length; ++j) {
+        if (magic[j] != header[j])
+	  return 0;
+      }
+      return magic;
+    }
+
+    let magicN = ("2321,a1b2c3d4,d4c3b2a1,0a0d0d0a,edabeedb,53514c69746520666f726d6174203300,"+
+"53503031,00,000000000000000000000000000000000000000000,bebafeca,00014244,00014454,54444624,"+
+"54444546,00010000,00000100,667479703367,1f9d,1fa0,4241434b4d494b454449534B,425a68,474946383761,"+
+"474946383961,49492a00,4d4d002a,49492a00100000004352,802a5fd7,524e4301,524e4302,53445058,58504453,"+
+"762f3101,425047fb,ffd8ffdb,ffd8ffe000104a4649460001,ffd8ffee,ffd8ffe1,464f524d,464f524d,464f524d,464f524d,464f524d,464f524d,464f524d,"+
+"464f524d,464f524d,464f524d,464f524d,464f524d,494e4458,4c5a4950,4d5a,504b0304,504b0506,504b0708,"+
+"526172211a0700,526172211a070100,5a4d,7f454c46,89504e470d0a1a0a,c9,cafebabe,efbbbf,feedface,feedfacf,"+
+"feedfeed,cefaedfe,cffaedfe,fffe,fffe0000,25215053,255044462d,3026b2758e66cf11a6d900aa0062ce6c,"+
+"2453444930303031,4f676753,38425053,52494646,52494646,fffb,494433,424d,4344303031,53494d504c452020,"+
+"3d202020202020202020202020202020202020202054,664c6143,4d546864,d0cf11e0a1b11ae1,6465780a30333500,"+
+"4b444d,43723234,41474433,05070000424f424f05070000000000000000000001,0607e100424f424f0607e10000000000000000000001,455202000000,8b455202000000,"+
+"7801730d626260,78617221,504d4f43434d4f43,4e45531a,7573746172003030,7573746172202000,"+
+"746f7833,4d4c5649,44434d0150413330,377abcaf271c,1f8b,fd377a585a0000,04224d18,4d534346,535a444488f02733,"+
+"464c4946,1a45dfa3,4d494c20,41542654464f524d,3082,4449434d,774f4646,774f4632,3c3f786d6c20,0061736d,cf8401,"+
+"435753,465753,213c617263683e,52494646,27051956,7b5c72746631,54415045,47,000001ba,000001ba,47,000001b3,"+
+"7801,789c,78da,62767832,4f5243,4f626a01,53455136,65877856,5555aaaa,785634,50415231,454d5832,"+
+"454d5533,1b4c7561,626f6f6b000000006d61726b00000000,5b5a6f6e655472616e736665725d,5265636569766564,"+
+"20020162a01eab0702000000,3748030200000000583530394b4559,85010c03,28b52ffd,3a290a,4a6f7921,310a3030,"+
+"3c21444f43545950452068746d6c3e,"+
+"3c68746d6c3e,23696e636c756465,7061636b61676520,0001028bae6c5b291cc78e25470b8625,56455253494f4e20352e30300d0a426567696e2056422e46,"+
+"466f726d31203d2034362c2034372c20,547970653d4578650d0a466f726d3d,696d706f727420,3c3f706870").toUpperCase();
+
+    let typeN = "shebang,pcap,pcap,pcapng,rpm,sqlitedb/sqlite/db,bin,PIC/PIF/SEA/YTR,PDB,DBA,DBA,TDA,TDF$,"+
+"TDEF,n/a,ico,3gp/3g2,z/tar.z,z/tar.z,bac,bz2,gif,gif,tif/tiff,tif/tiff,cr2,cin,n/a,n/a,dpx,dpx,exr,"+
+"bpg,jpg/jpeg,jpg/jpeg,jpg/jpeg,jpg/jpeg,ilbm/lbm/ibm/iff,8svx/8sv/svx/snd/iff,acbm/iff,anbm/iff,anim/iff,faxx/fax/iff,"+
+"ftxt/iff,smus/smu/mus/iff,cmus/mus/iff,yuvn/yuv/iff,iff,aiff/aif/aifc/snd/iff,idx,lz,exe/dll,"+
+"zip/aar/apk/docx/epub/ipa/jar/kmz/maff/odp/ods/odt/pk3/pk4/pptx/usdz/vsdx/xlsc/xpi,"+
+"zip/aar/apk/docx/epub/ipa/jar/kmz/maff/odp/ods/odt/pk3/pk4/pptx/usdz/vsdx/xlsc/xpi,"+
+"zip/aar/apk/docx/epub/ipa/jar/kmz/maff/odp/ods/odt/pk3/pk4/pptx/usdz/vsdx/xlsc/xpi,rar,rar,exe,bin/axf/elf/o/prx/puff/ko/mod/so,"+
+"png,com,class,n/a,n/a,n/a,n/a,n/a,n/a,n/a,n/a,ps,pdf,asf/wma/wmv,n/a,ogg/oga/ogv,psd,wav,avi,mp3,mp3,"+
+"bpm/dib,iso,fits,fits,flac,mid/midi,doc/xls/ppt/msg,dex,vmdk,crx,fh8,cwk,cwk,toast,toast,dmg,xar,dat,nes,"+
+"tar,tar,tox,MLV,n/a,7z,gz/tar.gz,xz/tar.xz,lz4,cab,??_,flif,mkv/mka/mks/mk3d/webm,stg,djvu/djv,der,dcm,woff,"+
+"woff2,XML,wasm,lep,swf,swf,deb,webp,n/a,rtf,n/a,ts/tsv/tsa,m2p/vob,mpg/mpeg,mpg/mpeg,mpg/mpeg,zlib,zlib,zlib,"+
+"lzfse,orc,avro,rc,p25/obt,pcv,pbt/pdt/pea/peb/pet/pgt/pict/pjt/pkt/pmt,n/a,ez2,ez3/iso,luac,alias,Identifier,"+
+"eml,tde,kdb,pgp,zst,sml,n/a,srt,html,html,c/cpp,java,"+
+"db.crypt1,frm,vbw,vbp,py,php"; 
+
+    magicN = magicN.split(',');
+    typeN = typeN.split(',');
+    bin.info.type = "unavailable";
+    for (let k = 0; k < magicN.length; ++k) {
+      if(CompareMagicN(header, magicN[k])) {
+        bin.info.type = magicN[k];
+	bin.info.typeString = HexToAscii(magicN[k]);
+	bin.info.typeExtension = typeN[k];
+      }
+    }
+    
+    if(bin.info.type != "unavailable") { 
+      _("Cabecera:\n" + bin.info.type);                          _("Cabecera en ascii:\n" + bin.info.typeString);           _("Extension de archivo:\n" + bin.info.typeExtension);
+
+/* The switch stuff is just extra type dependent info. */
+      switch (bin.info.typeExtension) {
+        case "bin/axf/elf/o/prx/puff/ko/mod/so": 
+/* ELF */
+	  if(datos[9] == 1)
+	    bin.info.arch = "x86";
+	  else if (datos[9] == 2)
+	    bin.info.arch = "x64";
+	  else 
+	    _("No se pudo determinar la arquitectura. Bit = " + datos[9]);
+	  _("Arquitectura: " + bin.info.arch)
+	  if(datos[11] == 1)
+	    bin.info.encoding = "LSB";
+	  else if(datos[11] == 2)
+	    bin.info.encoding = "MSB";
+          else
+	    _("No se pudo determinar el encoding. Bit = " + datos[9]); 
+	  _("Encoding: " + bin.info.encoding);
+          for(let k = 32,tmp=""; k < 36; ++k) {
+	    tmp += datos[k];
+	    bin.info.ABI = tmp;
+	  }
+
+	  for(let k = 36,tmp=""; k < 40; ++k) {                        tmp += datos[k];                                           bin.info.machine = tmp;
+	  }
+
+	  if(bin.info.arch != "unavailable") {
+	    let bytes = 4*2, baseAddress = 48;
+	    if(bin.info.arch == "x64")
+	      bytes = 8*2;
+	    for(let k = 48,tmp=""; k < (baseAddress + bytes); ++k) {
+              tmp += datos[k];
+	      bin.info.entryPoint = tmp;
+	    }
+            baseAddress += bytes;
+
+	    for(let k = baseAddress ,tmp=""; k < (baseAddress + bytes); ++k) {
+              tmp += datos[k];
+	      bin.info.programHeaderT = tmp; 
+	    }
+            baseAddress += bytes;
+
+	    for(let k = baseAddress,tmp=""; k < (baseAddress+bytes); ++k) {
+              tmp += datos[k];
+	      bin.info.sectionHeaderT = tmp;
+	    }
+	  }
+   
+	  /* Format Little Endian */
+          function formatLSB(hexa) {
+	    return hexa.match(/../g).reverse().join('');
+	  }
+
+	  if(bin.info.encoding == "LSB") {
+	    bin.info.ABI = formatLSB(bin.info.ABI);
+	    bin.info.machine = formatLSB(bin.info.machine);
+	    bin.info.entryPoint = formatLSB(bin.info.entryPoint);
+	    bin.info.programHeaderT = formatLSB(bin.info.programHeaderT);
+	    bin.info.sectionHeaderT = formatLSB(bin.info.sectionHeaderT);
+	  }
+
+	  else if(bin.info.encoding == "MSB");
+	  else /* Check for more encodings to handle*/;
+
+_("Entry Point:\n" + bin.info.entryPoint + "\n" + parseInt(bin.info.entryPoint,16));
+_("Program Header\n" + bin.info.programHeaderT);
+_("Section Header\n" + bin.info.sectionHeaderT);
+
+
+	  switch(parseInt(bin.info.ABI, 16)) {
+            
+	    case 0:
+              bin.info.ABI = "System V";
+	    break;
+	   
+	    case 1:
+	      bin.info.ABI = "Hewlett-Packard HP-UX";
+	    break;
+
+	    case 2:
+	      bin.info.ABI = "NetBSD";
+	    break;
+
+	    case 3:
+	      bin.info.ABI = "Linux";
+	    break;
+
+	    case 4:
+	      bin.info.ABI = "GNU Hurd";
+	    break;
+
+	    case 6:
+	      bin.info.ABI = "Sun Solaris";
+	    break;
+
+	    case 7:
+	      bin.info.ABI = "AIX";
+	    break;
+
+	    case 8:
+	      bin.info.ABI = "IRIX";
+	    break;
+	  
+	    case 9:
+	      bin.info.ABI = "FreeBSD";
+	    break;
+
+	    case 10:
+	      bin.info.ABI = "Compaq Tru64 UNIX";
+	    break;
+
+	    case 11:
+	      bin.info.ABI = "Novell Modesto";
+	    break;
+
+	    case 12:
+	      bin.info.ABI = "OpenBSD";
+	    break;
+
+	    case 13:
+	      bin.info.ABI = "OpenVMS";
+	    break;
+
+	    case 14:
+	      bin.info.ABI = "Hewlett-Packard NonStop Kernel";
+	    break;
+
+	    case 15:
+	      bin.info.ABI = "Amiga Research AROS";
+	    break;
+
+	    case 16:
+	      bin.info.ABI = "Fenix OS";
+	    break;
+
+	    case 17:
+	      bin.info.ABI = "CloudABI";
+	    break;
+	  
+	    case 18:
+	      bin.info.ABI = "Stratus Technologies OpenVOS";
+	    break;
+
+	    case 97:
+	      bin.info.ABI = "ARM";
+	    break;
+
+	    case 255:
+	      bin.info.ABI = "Standalone Application";
+	    break;
+
+	    defualt:
+	      bin.info.ABI = "UNKNOWN";
+	  }
+
+	  _("Application Binary Interface: " + bin.info.ABI);
+
+	  switch(parseInt(bin.info.machine,16)) {
+
+	    case 0:
+	      bin.info.machine = "Defualt";
+	    break;
+
+	    case 1:
+	      bin.info.machine = "AT&T WE 32100";
+	    break;
+
+	    case 2:
+	      bin.info.machine = "Sun SPARC";
+	    break;
+
+	    case 3:
+	      bin.info.machine = "Intel 80386";
+	    break;
+
+	    case 4:
+	      bin.info.machine = "Motorola 68000";
+	    break;
+
+	    case 5:
+	      bin.info.machine = "Motorola 88000";
+	    break;
+
+	    case 6:
+	      bin.info.machine = "Intel 80486";
+	    break;
+
+	    case 7:
+	      bin.info.machine = "Intel i860";
+	    break;
+
+	    case 8:
+	      bin.info.machine = "MIPS RS3000 Big-Endian";
+	    break;
+
+	    case 9:
+	      bin.info.machine = "IBM System/370 Processor";
+	    break;
+
+	    case 10:
+	      bin.info.machine = "MIPS RS3000 Little-Endian";
+	    break;
+
+	    case 11:
+	      bin.info.machine = "RS6000";
+	    break;
+
+	    case 12:
+	    case 13:
+	    case 14:
+	      bin.info.machine = "UNKNOWN";
+	    break;
+
+	    case 15:
+	      bin.info.machine = "PA-RISC";
+	    break;
+
+	    case 16:
+	      bin.info.machine = "nCUBE";
+	    break;
+
+	    case 17:
+	      bin.info.machine = "Fujitsu VPP500";
+	    break;
+
+	    case 18:
+	      bin.info.machine = "Sun SPARC 32+";
+	    break;
+
+	    case 19:
+	      bin.info.machine = "Intel 80960";
+	    break;
+
+	    case 20:
+	      bin.info.machine = "PowerPC";
+	    break;
+
+	    case 21:
+	      bin.info.machine = "64-bit PowerPC";
+	    break;
+
+	    case 22:
+	      bin.info.machine = "IBM System/390 Processor";
+	    break;
+
+	    case 23:
+	    case 24:
+	    case 25:
+	    case 26:
+	    case 27:
+	    case 28:
+	    case 29:
+	    case 30:
+	    case 31:
+	    case 32:
+	    case 33:
+	    case 34:
+	    case 35:
+	      bin.info.machine = "UNKNOWN";
+	    break;
+
+	    case 36:
+	      bin.info.machine = "NEX V800";
+	    break;
+
+	    case 37:
+	      bin.info.machine = "Fujitsu FR20";
+	    break;
+
+	    case 38:
+	      bin.info.machine = "TRW RH-32";
+	    break;
+
+	    case 39:
+	      bin.info.machine = "Motorola RCE";
+	    break;
+
+	    case 40:
+	      bin.info.machine = "Advanced RISC Machines ARM";
+	    break;
+
+	    case 41:
+	      bin.info.machine = "Digital Alpha";
+	    break;
+
+	    case 42:
+	      bin.info.machine = "Hitachi SH";
+	    break;
+
+	    case 43:
+	      bin.info.machine = "Sun SPARC V9 (64-bit)";
+	    break;
+
+	    case 44:
+	      bin.info.machine = "Siemens Tricore embedded processor";
+	    break;
+
+	    case 45:
+	      bin.info.machine = "Argonaut RISC Core / Argonaut Technologies Inc";
+	    break;
+
+	    case 46:
+	      bin.info.machine = "Hitachi H8/300";
+	    break;
+
+	    case 47:
+	      bin.info.machine = "Hitachi H8/300H";
+	    break;
+
+	    case 48:
+	      bin.info.machine = "Hitachi H8S";
+	    break;
+
+	    case 49:
+	      bin.info.machine = "Hitachi H8/500";
+	    break;
+
+	    case 50:
+	      bin.info.machine = "Intel IA 64";
+	    break;
+
+	    case 51:
+	      bin.info.machine = "Stanford MIPS-X";
+	    break;
+	
+	    case 52:
+	      bin.info.machine = "Motorla ColdFire";
+	    break;
+
+	    case 53:
+	      bin.info.machine = "Motorola M68HC12";
+	    break;
+
+	    case 54:
+              bin.info.machine = "Fujitsu MMA Multimedia Acelerator";
+	    break;
+
+	    case 55:
+	      bin.info.machine = "Siemens PCP";                        break;
+
+	    case 56:
+	      bin.info.machine = "Sony nCPU embedded RISC processor";                                   
+	    break;
+
+	    case 57:
+              bin.info.machine = "Denso NDR1 microprocessor";                                
+	    break;
+
+	    case 58:
+              bin.info.machine = "Motorola Star*Core processor";                                   
+	    break;
+	    
+	    case 59:
+	      bin.info.machine = "Toyota ME16 processor";
+	    break;
+
+	    case 60:
+	      bin.info.machine = "STMicroelectronics ST100";         
+	    break;
+
+	    case 61:
+	      bin.info.machine = "Advanced Logic Corp. TinyJ";                        
+	    break;
+
+	    case 62:
+	      bin.info.machine = "AMDs x86-64 architecture";                                   
+	    break;
+
+	    case 63:
+	      bin.info.machine = "Sony DSP Processor";
+	    break;
+
+	    case 64:
+	    case 65:
+	      bin.info.machine = "UNKNOWN";
+	    break;
+
+	    case 66:
+	      bin.info.machine = "Siemens FX66 microcontroller";                                   
+	    break;
+
+	    case 67:
+	      bin.info.machine = "STMicroelectrics ST9+8/16 bit";                                   
+	    break;
+
+	    case 68:
+	      bin.info.machine = "STMicroelectrics ST7 8-bit";                                  
+	    break;
+
+	    case 69:
+	      bin.info.machine = "Motorola MC68HC16 Microcontroller";                                   
+	    break;
+
+	    case 70:
+	      bin.info.machine = "Motorola MC68HC11 Microcontroller";                                   
+	    break;
+	    
+	    case 71:
+	      bin.info.machine = "Motorola MC68HC08 Microcontroller";                                   
+	    break;
+
+	    case 72:
+	      bin.info.machine = "Motorola MC68HC05 Microcontroller";                                   
+	    break;
+
+	    case 73:
+	      bin.info.machine = "Silicon Graphics SVx";
+	    break;
+
+	    case 74:
+	      bin.info.machine = "STMicroelectrics ST19 8-bit";                                   
+	    break;
+
+	    case 75:
+	      bin.info.machine = "Digital VAX";
+	    break;
+
+	    case 76:
+	      bin.info.machine = "Axis Communications 32-bit";                                   
+	    break;
+
+	    case 77:
+	      bin.info.machine = "Infineon Technologies 32-bit";                                   
+	    break;
+
+	    case 78:
+	      bin.info.machine = "Element 14 64-bit DSP Processor";                                   
+	    break;
+
+	    case 79:
+	      bin.info.machine = "LSI Logic 16-bit DSP Processor";                                   
+	    break;
+
+	    case 80:
+	      bin.info.machine = "Donald Knuth's educational";                                  
+	    break;
+
+	    case 81:
+	      bin.info.machine = "Harvard University";
+	    break;
+
+	    case 82:
+	      bin.info.machine = "SiTera Prism";
+	    break;
+
+	    case 83:
+	      bin.info.machine = "Atmel AVR 8-bit microcontroller";                                   
+	    break;
+
+	    case 84:
+	      bin.info.machine = "Fujitsu FR30";
+	    break;
+
+	    case 85:
+	      bin.info.machine = "Mitsubishi D10V";
+	    break;
+
+	    case 86:
+	      bin.info.machine = "Mitsubishi D30V";
+	    break;
+
+	    case 87:
+	      bin.info.machine = "NEC v850";
+	    break;
+	    
+	    case 88:
+	      bin.info.machine = "Mitsubishi M32R";
+	    break;
+
+	    case 89:
+	      bin.info.machine = "Matsushita MN10300";
+	    break;
+
+	    case 90:
+	      bin.info.machine = "Matsushita MN10200";
+	    break;
+
+	    case 91:
+	      bin.info.machine = "picoJava";
+	    break;
+
+	    case 92:
+	      bin.info.machine = "OpenRISC 32-bit embedded";
+	    break;
+
+	    case 93:
+	      bin.info.machine = "ARC Cores Tangent-AS";
+	    break;
+
+	    case 94:
+	      bin.info.machine = "Tensilica Xtensa architecture";                                   
+	    break;
+
+	    default:
+	      bin.info.machine = "UNKNOWN";
+
+	  }
+	  _("ELF compilado para: " + bin.info.machine);
+	  /* CHECK TABLE TO COMPARE */
+        break;
+
+        case "exe/dll":
+        /* Extract PE headers data */
+
+	break;
+
+
+      }
+
+    } else 
+      _("No se pudo determinar el tipo de archivo");
+
+    bin.info.size = +(datos).length;
+      _("Tamaño de archivo:\n" + bin.info.size/2048 +"KB");
+  return header;
+  }
+}
+
+
+inp.onchange = e => {
+  _("Analizando...");
+  hexDump(inp.files[0])
+  .then(hex => {
+    hexSinFormato=hex;
+    $("#respuesta").value=Format(hex, 4, " ", 32);
+    $("#respuesta2").value=Format(HexToAscii(hexSinFormato), 2, "  ", 16, " ");
+    $("#addressRes").value=agregarDirecciones(contarLineas(hexSinFormato, 32));
+    $("#addressRes2").value=agregarDirecciones(contarLineas(hexSinFormato, 32));
+  })
+  .catch(e => _(e));
+}
+
+function HexToAscii(hex) {
+  hex = hex.toString();
+  let str = "";
+  for (let i=0; i < hex.length; i+=2) {
+    if(parseInt(hex.substr(i, 2), 16) > 31 && parseInt(hex.substr(i, 2), 16)  < 128) {		
+      switch (parseInt(hex.substr(i, 2), 16)) {
+        case 32:
+        str += " ";
+	break;
+			 
+        default:
+	str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+      }
+    } else
+      str += "."; 
+  }  
+  return str;
+}
+
+
+function Format(texto, padding, separador, paddingSalto, spacing="") {
+  let str = "";
+  for(let j=1; j < texto.length+1; ++j) {
+    str += spacing + "" + texto[j-1];
+    if(j % padding == 0)
+      str+= separador;                                     
+
+    if(j >= paddingSalto) {
+      if(j % paddingSalto  == 0)
+        str += "\n\n";  
+    }
+  } 
+  bin.hex.formated = str;
+  return str;
+}
+
+
+function Compile(hexData) {
+  let byteArray = new Uint8Array(hexData.match(/.{2}/g)
+  .map(e => parseInt(e, 16)));
+  let blob = new Blob([byteArray], {type:"application/octet-stream"});
+  return blob;
+}
+
+function SyncDivs(div1, div2, div3, div4) {
+  function selectScroll(e) {
+    $(div2).scrollTop = $(div1).scrollTop
+    $(div3).scrollTop = $(div2).scrollTop
+  }
+
+  function selectScroll2(e) {
+    $(div1).scrollTop = $(div2).scrollTop
+    $(div4).scrollTop = $(div1).scrollTop
+  }
+
+  ael($(div1), "scroll", selectScroll, 0);
+  ael($(div2), "scroll", selectScroll2, 0);
+}
+SyncDivs("#respuesta", "#respuesta2", "#addressRes", "#addressRes2");
+
+function contarLineas(hex, caracteresPorLinea) {
+  return hex.length/caracteresPorLinea;
+}
+
+function agregarDirecciones(lineas) {
+  let tmp = "", tmp2 = "";
+  for(let i = 0,m = 0; i < lineas; ++i) {
+    tmp2 = "0x00000000".split(""); 
+    if(i > 0) {
+      tmp3 = (i*16).toString(16).toUpperCase().split().reverse().join('');
+
+    }
+    else 
+      tmp3 = i.toString(16).toUpperCase().split().reverse().join('');	
+
+    for (let k = 0; k < tmp3.length; ++k) {
+      tmp2.pop();
+    }
+   
+    for (let k = 0; k < tmp3.length; ++k) {
+      tmp2.push(tmp3[k]);
+    }
+    tmp2 = tmp2.join("");
+    tmp += tmp2 + "\n\n";
+  }
+  return tmp;
+}
+
+</script>
+</body>
+</html>
